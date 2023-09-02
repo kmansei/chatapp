@@ -4,12 +4,13 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.concurrent.Executors;
 
 // サーバーからのブロードキャストを待ち受けるスレッド
-class ClientWorker extends Thread {
+class ServerListener implements Runnable {
     private Socket socket;
 
-    ClientWorker(Socket socket) {
+    ServerListener(Socket socket) {
         this.socket = socket;
     }
 
@@ -31,36 +32,41 @@ class ClientWorker extends Thread {
 
 // サーバーに接続してチャットを行う
 public class Client {
+    private static final String SERVER_HOST = "localhost";
+    private static final int SERVER_PORT = 1234;
+
     public static void main(String[] args) {
-        try (Socket socket = new Socket("localhost", 1234);
+        try (Socket socket = new Socket(SERVER_HOST, SERVER_PORT);
                 OutputStream out = socket.getOutputStream();
                 PrintWriter writer = new PrintWriter(out, true);
                 Scanner scanner = new Scanner(System.in)) {
 
             // ユーザー名の代わりにプロセスIDを使用
             var PID = ProcessHandle.current().pid();
-
             System.out.println("チャットサーバーと接続(PID: " + PID + ")");
 
+            // 単一のスレッドプール
+            var executorService = Executors.newSingleThreadExecutor();
+
             // サーバーからのブロードキャストを待ち受けるスレッドを起動
-            new ClientWorker(socket).start();
+            executorService.execute(new ServerListener(socket));
 
             String input;
             // 入力を待ち受ける
             while (true) {
-                input = scanner.nextLine();
+
                 // 空行が入力されたら終了
+                input = scanner.nextLine();
                 if (input == null || input.equals("")) {
                     break;
                 }
 
-                var message = PID + ": " + input;
                 // サーバーにチャット送信
+                var message = PID + ": " + input;
                 writer.println(message);
             }
         } catch (Exception e) {
             System.out.println(e);
-            System.out.println("hello");
         } finally {
             System.out.println("チャットサーバーとの接続を停止");
         }

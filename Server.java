@@ -4,15 +4,16 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-// クライアントからの入力を受け取って、サーバーと接続しているクライアント全員にブロードキャストするスレッド
-class Worker extends Thread {
+class ClientHandler implements Runnable {
     private Socket socket;
     private PrintWriter writer;
 
-    Worker(Socket socket) {
+    ClientHandler(Socket socket) {
         this.socket = socket;
     }
 
@@ -23,50 +24,51 @@ class Worker extends Thread {
                 Socket tempSocket = socket) {
 
             writer = tempWriter;
-            synchronized (Server.writers) {
-                Server.writers.add(writer);
-            }
 
+            String message;
             // クライアントからの投稿を待ち受ける
-            String line;
-            while ((line = reader.readLine()) != null) {
-
+            while ((message = reader.readLine()) != null) {
                 // 接続している全てのクライアントにブロードキャスト
-                synchronized (Server.writers) {
-                    for (PrintWriter pw : Server.writers) {
-                        pw.println(line);
-                    }
-                }
-
+                broadcast(message);
                 // 受け取ったメッセージはサーバー側でも表示
-                System.out.println(line);
+                System.out.println(message);
             }
 
         } catch (Exception e) {
             System.out.println(e);
         } finally {
-            // サーバーが持つprintwriter一覧から自身のprintwriterを削除
-            synchronized (Server.writers) {
-                Server.writers.remove(writer);
-            }
+            // クライアントが切断したらハンドラを削除
+            Server.handlers.remove(this);
+        }
+    }
+
+    void broadcast(String message) {
+        for (var handler : Server.handlers) {
+            handler.writer.println(message);
         }
     }
 }
 
-// クライアントからの接続を待ち受ける
+// チャットサーバー
 public class Server {
-    // サーバーと接続しているクライアントとの出力ストリームを保持
-    public static Set<PrintWriter> writers = new HashSet<>();
+
+    // スレッドセーフなハッシュセット
+    public static Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
+
+    // スレッドプール
+    private static ExecutorService executorService = Executors.newCachedThreadPool();
 
     public static void main(String[] args) {
         try (ServerSocket serverSocket = new ServerSocket(1234)) {
 
             System.out.println("チャットサーバー起動");
 
-            // クライアントからの接続を確認するたびにworkerスレッド生成
+            // クライアントからの接続を確認するたびにハンドラを生成、スレッドプールに渡す
             while (true) {
-                Socket socket = serverSocket.accept();
-                new Worker(socket).start();
+                var socket = serverSocket.accept();
+                var clientHandler = new ClientHandler(socket);
+                handlers.add(clientHandler);
+                executorService.execute(clientHandler);
             }
 
         } catch (Exception e) {
