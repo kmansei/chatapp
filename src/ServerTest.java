@@ -20,9 +20,9 @@ public class ServerTest {
     public void tearDown() throws Exception {
     }
 
-    // クライアントを2つサーバーと接続
+    // クライアントと接続した時の接続テスト
     @Test
-    public void testConnection() throws IOException {
+    public void testConnection() throws Exception {
         try (Socket socket1 = new Socket(Server.HOST, Server.PORT);
                 Socket socket2 = new Socket(Server.HOST, Server.PORT)) {
 
@@ -35,5 +35,24 @@ public class ServerTest {
                 assertTrue(clientHandler.getSocket() != null && clientHandler.getSocket().isConnected());
             }
         }
+    }
+
+    // クライアントとの接続が切れたときにClientHandlerのリソースが解放されているかのテスト
+    @Test
+    public void testResourceReleaseAfterClientDisconnection() throws Exception {
+        // クライアントがサーバーと接続
+        var clientSocket = new Socket(Server.HOST, Server.PORT);
+
+        // サーバーがクライアントを受け入れるのを待つ
+        Thread.sleep(1000);
+
+        // サーバー側のスレッド取得
+        var clientHandler = Server.handlers.iterator().next();
+
+        // クライアントとの接続を切断
+        clientSocket.close();
+
+        // clienthandlerが持つソケットがcloseされているかをテスト
+        assertTrue(clientHandler.getSocket().isClosed());
     }
 }
