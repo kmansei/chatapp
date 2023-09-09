@@ -20,21 +20,24 @@ public class ServerTest {
     public void tearDown() throws Exception {
     }
 
-    // クライアントと接続した時の接続テスト
+    // クライアントとの接続テスト
     @Test
     public void testConnection() throws Exception {
-        try (Socket socket1 = new Socket(Server.HOST, Server.PORT);
-                Socket socket2 = new Socket(Server.HOST, Server.PORT)) {
+        // クライアントを二つサーバーと接続
+        var socket1 = new Socket(Server.HOST, Server.PORT);
+        var socket2 = new Socket(Server.HOST, Server.PORT);
 
-            // クライアント側のソケットの接続確認
-            assertTrue(socket1.isConnected());
-            assertTrue(socket2.isConnected());
+        // クライアント側のソケットがisConnectedか
+        assertTrue(socket1.isConnected());
+        assertTrue(socket2.isConnected());
 
-            // サーバー側のソケットの接続確認
-            for (ClientHandler clientHandler : Server.handlers) {
-                assertTrue(clientHandler.getSocket() != null && clientHandler.getSocket().isConnected());
-            }
+        // サーバー側のソケットがisConnectedか
+        for (ClientHandler clientHandler : Server.handlers) {
+            assertTrue(clientHandler.getSocket() != null && clientHandler.getSocket().isConnected());
         }
+
+        socket1.close();
+        socket2.close();
     }
 
     // クライアントとの接続が切れたときにClientHandlerのリソースが解放されているかのテスト
