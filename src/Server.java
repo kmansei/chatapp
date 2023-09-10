@@ -1,13 +1,12 @@
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 // チャットサーバー
 public class Server {
@@ -15,31 +14,43 @@ public class Server {
     public static final int PORT = 1234;
 
     // スレッドセーフなハッシュセット
-    public static Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
-
-    // スレッドプール
-    private static ExecutorService executorService = Executors.newCachedThreadPool();
+    public final Set<SocketChannel> clientChannels = ConcurrentHashMap.newKeySet();
 
     public static void main(String[] args) {
         new Server();
     }
 
     Server() {
-        initialize();
+        start();
     }
 
     // サーバー起動
-    private void initialize() {
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+    private void start() {
+        try (ServerSocketChannel serverSocketChannel = initializeServer()) {
+            var selector = Selector.open();
 
-            System.out.println("チャットサーバー起動");
+            // サーバーソケットチャネルのAcceptイベントをセレクターに登録
+            serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-            // クライアントからの接続を確認するたびにハンドラを生成、スレッドプールに渡す
-            while (true) {
-                var socket = serverSocket.accept();
-                var clientHandler = new ClientHandler(socket);
-                handlers.add(clientHandler);
-                executorService.execute(clientHandler);
+            // チャネルにイベントが登録されるまで待つ
+            while (selector.select() > 0) {
+
+                // イベントを取得
+                for (var key : selector.selectedKeys()) {
+                    if (!key.isValid())
+                        continue;
+
+                    if (key.isAcceptable()) {
+                        // Acceptイベントの場合
+                        handleAccept(serverSocketChannel, selector);
+                    } else if (key.isReadable()) {
+                        // Readイベントの場合
+                        handleRead(key);
+                    }
+                }
+
+                // 処理したイベントを削除
+                selector.selectedKeys().clear();
             }
 
         } catch (Exception e) {
@@ -48,49 +59,55 @@ public class Server {
             System.out.println("チャットサーバー停止");
         }
     }
-}
 
-class ClientHandler implements Runnable {
-    private Socket socket;
-    private PrintWriter writer;
+    // 初期化されたサーバーチャンネルを取得
+    private ServerSocketChannel initializeServer() throws IOException {
+        var serverChannel = ServerSocketChannel.open();
+        serverChannel.configureBlocking(false);
+        serverChannel.socket().bind(new InetSocketAddress(HOST, PORT));
+        System.out.println("チャットサーバー起動");
 
-    ClientHandler(Socket socket) {
-        this.socket = socket;
+        return serverChannel;
     }
 
-    // 接続している全てのクライアントにブロードキャスト
-    private void broadcast(String message) {
-        for (var handler : Server.handlers) {
-            handler.writer.println(message);
+    // クライアントからのAcceptイベントを処理
+    private void handleAccept(ServerSocketChannel serverChannel, Selector selector) throws IOException {
+        var clientChannel = serverChannel.accept();
+        clientChannel.configureBlocking(false);
+        clientChannels.add(clientChannel);
+
+        // クライアントからのReadイベントをセレクターに登録
+        clientChannel.register(selector, SelectionKey.OP_READ);
+    }
+
+    // クライアントからのReadイベントを処理
+    private void handleRead(SelectionKey key) throws IOException {
+        var channel = (SocketChannel) key.channel();
+        var buffer = ByteBuffer.allocate(1024);
+        var read = channel.read(buffer);
+
+        // クライアントからの切断を検知
+        if (read == -1) {
+            clientChannels.remove(channel);
+            channel.close();
+            key.channel();
+            return;
         }
+
+        buffer.flip();
+        var message = new String(buffer.array(), 0, read);
+
+        // クライアントからのメッセージを全てのクライアントにブロードキャスト
+        broadcast(message);
+
+        // 受け取ったメッセージはサーバー側でも表示
+        System.out.println(message);
     }
 
-    public void run() {
-        try (InputStream in = socket.getInputStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(in));
-                PrintWriter tempWriter = new PrintWriter(socket.getOutputStream(), true);
-                Socket tempSocket = socket) {
-
-            writer = tempWriter;
-
-            String message;
-            // クライアントからの投稿を待ち受ける
-            while ((message = reader.readLine()) != null) {
-                // 接続している全てのクライアントにブロードキャスト
-                broadcast(message);
-                // 受け取ったメッセージはサーバー側でも表示
-                System.out.println(message);
-            }
-
-        } catch (Exception e) {
-            System.out.println(e);
-        } finally {
-            // クライアントが切断したらハンドラを削除
-            Server.handlers.remove(this);
+    // クライアントからのメッセージを全てのクライアントにブロードキャスト
+    private void broadcast(String message) throws IOException {
+        for (var channel : clientChannels) {
+            channel.write(ByteBuffer.wrap(message.getBytes()));
         }
-    }
-
-    public Socket getSocket() {
-        return socket;
     }
 }

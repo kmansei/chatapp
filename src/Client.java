@@ -1,55 +1,63 @@
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 
 public class Client {
-    private Socket socket;
+    private final String HOST = "localhost";
+    private final int PORT = 1234;
+
+    private SocketChannel socket;
 
     public static void main(String[] args) {
         new Client();
     }
 
     Client() {
-        initialize();
+        start();
     }
 
-    private void initialize() {
-        try (Socket socket = new Socket(Server.HOST, Server.PORT);
-                OutputStream out = socket.getOutputStream();
-                PrintWriter writer = new PrintWriter(out, true);
+    private void start() {
+        try (SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress(HOST, PORT));
                 Scanner scanner = new Scanner(System.in)) {
 
-            this.socket = socket;
+            socket = socketChannel;
 
-            // ユーザー名の代わりにプロセスIDを使用
+            // ノンブロッキングモード
+            socketChannel.configureBlocking(false);
             var PID = ProcessHandle.current().pid();
-            System.out.println("チャットサーバーと接続(PID: " + PID + ")");
+            System.out.println("チャットサーバーに接続しました (PID: " + PID + ")");
 
-            // サーバーからのブロードキャストを待ち受けるスレッドを起動
-            Executors.newSingleThreadExecutor().execute(new ServerListener(socket));
+            // サーバーからのメッセージを受信するスレッドを起動
+            Executors.newSingleThreadExecutor().execute(new ServerListener(socketChannel));
 
-            String input;
-            // 入力を待ち受ける
+            var buffer = ByteBuffer.allocate(1024);
+
             while (true) {
+                // ユーザーのを入力を待つ
+                String input = scanner.nextLine();
 
-                // 空行が入力されたら終了
-                input = scanner.nextLine();
-                if (input == null || input.equals("")) {
-                    break;
-                }
-
-                // サーバーにチャット送信
-                var message = PID + ": " + input;
-                writer.println(message);
+                // サーバーにメッセージを送信
+                sendToServer(socketChannel, buffer, PID + ": " + input);
             }
+
         } catch (Exception e) {
             System.out.println(e);
         } finally {
             System.out.println("チャットサーバーとの接続を停止");
+        }
+    }
+
+    // サーバーにメッセージを送信
+    private void sendToServer(SocketChannel channel, ByteBuffer buffer, String message) throws Exception {
+        buffer.clear();
+        buffer.put(message.getBytes());
+        buffer.flip();
+        while (buffer.hasRemaining()) {
+            channel.write(buffer);
         }
     }
 
@@ -59,26 +67,37 @@ public class Client {
     }
 }
 
-// サーバーからのブロードキャストを待ち受けるスレッド
 class ServerListener implements Runnable {
-    private Socket socket;
+    private SocketChannel channel;
 
-    ServerListener(Socket socket) {
-        this.socket = socket;
+    ServerListener(SocketChannel channel) {
+        this.channel = channel;
     }
 
     public void run() {
-        try (PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+        var buffer = ByteBuffer.allocate(1024);
+        try (Selector selector = Selector.open()) {
+            channel.register(selector, SelectionKey.OP_READ);
 
-            // サーバーからのメッセージを待ち受ける
-            String message;
-            while ((message = reader.readLine()) != null) {
-                System.out.println(message);
+            // イベントが発生するまで待機
+            while (selector.select() > 0) {
+
+                for (SelectionKey key : selector.selectedKeys()) {
+                    if (key.isReadable()) {
+                        buffer.clear();
+                        var read = channel.read(buffer);
+                        if (read > 0) {
+                            String response = new String(buffer.array(), 0, read);
+                            System.out.println(response);
+                        }
+                    }
+                }
+                selector.selectedKeys().clear();
             }
-
         } catch (Exception e) {
             System.out.println(e);
+        } finally {
+            System.out.println("チャットサーバーとの接続を停止");
         }
     }
 }
