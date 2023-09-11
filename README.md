@@ -36,3 +36,10 @@ java Client
   - ExecutorServiceを使うように修正
 - [8e4237d](https://github.com/kmansei/chatapp/commit/8e4237d8a7ad801cfa1122f60c7d8d6000078f00)
   - テストコードの追加、リファクタリング
+- [17b0769](https://github.com/kmansei/chatapp/commit/17b07698b8aaf0cb91758025cfc322b339e03997)
+  - クライアント退室後にサーバーサイドのclienthandlerのリソースが解放されているかのテスト
+- [ab9d3a3](https://github.com/kmansei/chatapp/commit/ab9d3a3094683743d31556e1ee8d42c2a4f962af)
+  - サーバー及びクライアントにてnioを使うように修正
+  - 実装にあたって下記の記事を参照
+    - https://www.kimullaa.com/posts/201612081500/
+    - https://jenkov.com/tutorials/java-nio/index.html
