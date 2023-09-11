@@ -14,7 +14,7 @@ public class Server {
     public static final int PORT = 1234;
 
     // スレッドセーフなハッシュセット
-    public final Set<SocketChannel> clientChannels = ConcurrentHashMap.newKeySet();
+    public static final Set<SocketChannel> clientChannels = ConcurrentHashMap.newKeySet();
 
     public static void main(String[] args) {
         new Server();
@@ -109,5 +109,10 @@ public class Server {
         for (var channel : clientChannels) {
             channel.write(ByteBuffer.wrap(message.getBytes()));
         }
+    }
+
+    // 以下Unitテスト用のメソッド
+    public static Set<SocketChannel> getClientChannels() {
+        return clientChannels;
     }
 }

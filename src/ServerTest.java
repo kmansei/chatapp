@@ -3,8 +3,9 @@ import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
-import java.io.*;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.util.concurrent.Executors;
 
 public class ServerTest {
@@ -23,39 +24,48 @@ public class ServerTest {
     // クライアントとの接続テスト
     @Test
     public void testConnection() throws Exception {
+        // サーバーの準備ができるまで待つ
+        Thread.sleep(1000);
+
         // クライアントを二つサーバーと接続
-        var socket1 = new Socket(Server.HOST, Server.PORT);
-        var socket2 = new Socket(Server.HOST, Server.PORT);
+        var socketChannel1 = SocketChannel.open(new InetSocketAddress(Server.HOST, Server.PORT));
+        var socketChannel2 = SocketChannel.open(new InetSocketAddress(Server.HOST, Server.PORT));
+
+        // サーバーがクライアントを受け入れるのを待つ
+        Thread.sleep(1000);
 
         // クライアント側のソケットがisConnectedか
-        assertTrue(socket1.isConnected());
-        assertTrue(socket2.isConnected());
+        assertTrue(socketChannel1.isConnected());
+        assertTrue(socketChannel2.isConnected());
 
         // サーバー側のソケットがisConnectedか
-        for (ClientHandler clientHandler : Server.handlers) {
-            assertTrue(clientHandler.getSocket() != null && clientHandler.getSocket().isConnected());
+        for (var channel : Server.clientChannels) {
+            assertTrue(channel.socket() != null && channel.socket().isConnected());
         }
 
-        socket1.close();
-        socket2.close();
+        socketChannel1.close();
+        socketChannel2.close();
     }
 
     // クライアントとの接続が切れたときにClientHandlerのリソースが解放されているかのテスト
     @Test
     public void testResourceReleaseAfterClientDisconnection() throws Exception {
+        // サーバーがクライアントを受け入れるのを待つ
+        Thread.sleep(1000);
+
         // クライアントがサーバーと接続
-        var clientSocket = new Socket(Server.HOST, Server.PORT);
+        var socketChannel1 = SocketChannel.open(new InetSocketAddress(Server.HOST, Server.PORT));
 
         // サーバーがクライアントを受け入れるのを待つ
         Thread.sleep(1000);
 
         // サーバー側のスレッド取得
-        var clientHandler = Server.handlers.iterator().next();
+        var clientChannel = Server.clientChannels.iterator().next();
 
         // クライアントとの接続を切断
-        clientSocket.close();
+        socketChannel1.close();
 
         // clienthandlerが持つソケットがcloseされているかをテスト
-        assertTrue(clientHandler.getSocket().isClosed());
+        assertTrue(clientChannel.socket().isClosed());
     }
 }
