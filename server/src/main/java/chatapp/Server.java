@@ -52,19 +52,19 @@ public class Server {
 }
 
 class ServerHandler extends ChannelInboundHandlerAdapter {
-    // すべてのアクティブなクライアントを保持するリストまたは集合
+    // すべてのアクティブなクライアントを保持するセット
     private static final Set<ChannelHandlerContext> channels = ConcurrentHashMap.newKeySet();
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        // 新しいクライアントが接続した際にリストまたは集合に追加
+        // 新しいクライアントが接続した際にセットに追加
         channels.add(ctx);
         super.channelActive(ctx);
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        // クライアントが切断した際にリストまたは集合から削除
+        // クライアントが切断した際にセットから削除
         channels.remove(ctx);
         super.channelInactive(ctx);
     }
