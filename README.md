@@ -1,10 +1,10 @@
 ## 動作確認
 ```
 サーバー
-java Server
+./gradlew server:run
 
 クライアント
-java Client
+./gradlew client:run
 ```
 
 ## 実装
