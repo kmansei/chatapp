@@ -8,16 +8,15 @@ java Client
 ```
 
 ## 実装
-- src/Server.java
+- https://github.com/kmansei/chatapp/blob/main/server/src/main/java/chatapp/Server.java
   - サーバー実装
-- src/Client.java
+- https://github.com/kmansei/chatapp/blob/main/client/src/main/java/chatapp/Client.java
   - クライアント実装
-- src/ServerTest.java
-  - テスト
 
-## 使用ライブラリ
-- JUnit4
-  - テスト
+## 使用ライブラリ, ツール
+- Gradle
+- Netty
+- JUnit
 
 ## 設計
 ### 当初
@@ -43,3 +42,8 @@ java Client
   - 実装にあたって下記の記事を参照
     - https://www.kimullaa.com/posts/201612081500/
     - https://jenkov.com/tutorials/java-nio/index.html
+- [1a05eeb](https://github.com/kmansei/chatapp/commit/1a05eeb34fe1f18e69c50010b4c197f0ba052887)
+  - Gradle導入
+- [1bc94d](https://github.com/kmansei/chatapp/commit/1bc94def92545aa1555a70e1b60842eb25525208)
+  - Netty導入
+  - https://netty.io/wiki/user-guide-for-4.x.html#wiki-h3-8
