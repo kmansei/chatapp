@@ -21,6 +21,9 @@ public class Server {
     private static final String HOST = "localhost";
     private static final int PORT = 1234;
 
+    // すべてのアクティブなクライアントを保持するセット
+    public static final Set<ChannelHandlerContext> channels = ConcurrentHashMap.newKeySet();
+
     public static void main(String[] args) throws InterruptedException {
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
@@ -33,7 +36,10 @@ public class Server {
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel ch) throws Exception {
+                            // StringDecoder, ServerHandlerはChannelInboundHandler
+                            // StringEncoderはChannelOutboundHandler
                             ch.pipeline().addLast(new StringDecoder(), new StringEncoder(), new ServerHandler());
+                            System.out.println("Initされたよ");
                         }
                     })
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
@@ -52,20 +58,18 @@ public class Server {
 }
 
 class ServerHandler extends ChannelInboundHandlerAdapter {
-    // すべてのアクティブなクライアントを保持するセット
-    private static final Set<ChannelHandlerContext> channels = ConcurrentHashMap.newKeySet();
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         // 新しいクライアントが接続した際にセットに追加
-        channels.add(ctx);
+        Server.channels.add(ctx);
         super.channelActive(ctx);
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         // クライアントが切断した際にセットから削除
-        channels.remove(ctx);
+        Server.channels.remove(ctx);
         super.channelInactive(ctx);
     }
 
@@ -76,7 +80,7 @@ class ServerHandler extends ChannelInboundHandlerAdapter {
         System.out.println(message);
 
         // 他の接続している全てのクライアントにブロードキャスト
-        for (ChannelHandlerContext channel : channels) {
+        for (ChannelHandlerContext channel : Server.channels) {
             if (channel != ctx) {
                 channel.writeAndFlush(message);
             }
