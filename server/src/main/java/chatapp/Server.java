@@ -4,17 +4,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.handler.codec.string.StringEncoder;
+import io.netty.channel.ChannelHandler.Sharable;
 
 public class Server {
 
@@ -27,21 +23,14 @@ public class Server {
     public static void main(String[] args) throws InterruptedException {
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
+        var initializer = new ServerInitializer();
 
         try {
             ServerBootstrap b = new ServerBootstrap();
             b.group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel.class)
                     .option(ChannelOption.SO_BACKLOG, 128)
-                    .childHandler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        protected void initChannel(SocketChannel ch) throws Exception {
-                            // StringDecoder, ServerHandlerはChannelInboundHandler
-                            // StringEncoderはChannelOutboundHandler
-                            ch.pipeline().addLast(new StringDecoder(), new StringEncoder(), new ServerHandler());
-                            System.out.println("Initされたよ");
-                        }
-                    })
+                    .childHandler(initializer)
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
 
             // ホストアドレスとポート番号を指定してサーバーを起動
@@ -57,6 +46,21 @@ public class Server {
     }
 }
 
+class ServerInitializer extends ChannelInitializer<SocketChannel>  {
+    private static final StringDecoder DECODER = new StringDecoder();
+    private static final StringEncoder ENCODER = new StringEncoder();
+    private static final ServerHandler HANDLER = new ServerHandler();
+
+    @Override
+    public void initChannel(SocketChannel ch) throws Exception {
+        ChannelPipeline pipeline = ch.pipeline();
+        pipeline.addLast(DECODER);
+        pipeline.addLast(ENCODER);
+        pipeline.addLast(HANDLER);
+    }
+}
+
+@Sharable
 class ServerHandler extends ChannelInboundHandlerAdapter {
 
     @Override
